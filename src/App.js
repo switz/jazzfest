@@ -13,75 +13,98 @@ const monthDay = (date) => {
   return [date.getMonth(), date.getDate()].join(':');
 }
 
-const BASE_URL = 'https://cors-anywhere.herokuapp.com/https://groups.yahoo.com';
+const BASE_URL = 'https://cors-anywhere.herokuapp.com/http://www.jazzfestgrids.com';
 
 const fetchData = async ({ setLoading, setData }) => {
   setLoading(true);
 
-  const href = await fetch(`${BASE_URL}/neo/groups/nyc_sotw/conversations/topics`)
-    .then(res => res.text())
-    .then(text => {
-      const $ = cheerio.load(text)
-
-      return $('#yg-msg-list a.yg-msg-link').attr('href');
-    });
-
-  const text = await fetch(`${BASE_URL}${href}`)
+  let shows = [];
+  const arr = await fetch(`${BASE_URL}/first_weekend`)
     .then(res => res.text())
     .then(text => {
       const $ = cheerio.load(text);
 
-      return $('.msg-list-container li:last-child .msg-content').html().replace(/<(?:\/?(span|a)).*?>/gm, '').replace(/<(?:.|\n)*?>/gm, '\n').replace(/\n+/g, '\n');
-    })
-    .then(text => he.decode(text))
-    .then(text =>
-      text.split('\n')
-          .map(line =>
-            /:$/.test(line) ? `\n${line}` : line
-          ).join('\n')
-    );
+      const $venueCells = $('.grid_table').find('.venue_cell');
 
-  const finalStructure = [];
-  let currentDay;
+      return $venueCells.map((i, $venueCell) => {
+        const $venue = $($venueCell);
+        const $showCells = $venue.nextAll('.show_cell');
 
-  console.log('text', text);
-  text.split('\n')
-    .forEach(line => {
-      if (!line) return;
+        const $a = $venue.find('a[href*="/venue/"]');
+        const venueName = $a.text();
+        const venueUrl = $a.attr('href');
 
-      if (/Nedar:$/.test(line)) {
-        if (currentDay) finalStructure.push(currentDay);
+        console.log($a.text(), 'href', $a.attr('href'))
 
-        currentDay = { shows: [], line };
-      }
-      else if (/\):$/.test(line)) {
-        if (currentDay) finalStructure.push(currentDay);
+        return $showCells.map((j, $showCell) => {
+          const $show = $($showCell);
+          const date = $show.attr('onclick').replace(/.+\, \'/, '').replace(/\'\)$/, '');
 
-        const [f, dateStr] = line.match(/\((.+)\)/);
-        const date = new Date(dateStr + '/' + new Date().getFullYear());
-        currentDay = { shows: [], line, date };
-      }
+          console.log(date, $show.find('hr'))
 
-      if (/@.+/.test(line) && currentDay) {
-        const [m, isAsterisked, band, metadata] = line.match(/(\*)?(.+)@(.+)/);
+          if ($show.find('hr').length) {
+            const showText = he.decode($show.html()).replace(/<(?:\/?(hr)).*?>/gm, 'SPLITME').replace(/<(?:.|\n)*?>/gm, '\n').replace(/\n+/g, '\n')
+              .split('\n').map(x => x.replace(/^(\n|\s)*$/g, '\n')).join('').replace(/\n+/g, '\n').replace(/(^\n+|\n+$)/, '').replace(/(^\s+|\s+$)/, '');
 
-        const currentShow = {
-          line,
-          isAsterisked: !!isAsterisked,
-          band,
-          metadata,
-        };
-        currentDay.shows.push(currentShow);
-      }
+            showText.split('SPLITME').map(text => {
+              shows.push({ showText: text, venueName, venueUrl, date });
+            })
+          }
+          else {
+            const showText = he.decode($show.html()).replace(/<(?:\/?(span|a)).*?>/gm, '').replace(/<(?:.|\n)*?>/gm, '\n').replace(/\n+/g, '\n')
+              .split('\n').map(x => x.replace(/^(\n|\s)*$/g, '\n')).join('').replace(/\n+/g, '\n').replace(/(^\n+|\n+$)/, '').replace(/(^\s+|\s+$)/, '');
+
+            if (!showText || /^(\n|\s)+$/.test(showText)) return;
+
+            shows.push({ showText, venueName, venueUrl, date });
+          }
+        });
+      });
     });
 
-  if (currentDay) {
-    finalStructure.push(currentDay);
-  }
+    console.log(shows);
 
-  localStorage.sotwData = JSON.stringify(finalStructure);
-  setData(finalStructure);
-  setLoading(false);
+//   const finalStructure = [];
+//   let currentDay;
+//
+//   console.log('text', text);
+//   text.split('\n')
+//     .forEach(line => {
+//       if (!line) return;
+//
+//       if (/Nedar:$/.test(line)) {
+//         if (currentDay) finalStructure.push(currentDay);
+//
+//         currentDay = { shows: [], line };
+//       }
+//       else if (/\):$/.test(line)) {
+//         if (currentDay) finalStructure.push(currentDay);
+//
+//         const [f, dateStr] = line.match(/\((.+)\)/);
+//         const date = new Date(dateStr + '/' + new Date().getFullYear());
+//         currentDay = { shows: [], line, date };
+//       }
+//
+//       if (/@.+/.test(line) && currentDay) {
+//         const [m, isAsterisked, band, metadata] = line.match(/(\*)?(.+)@(.+)/);
+//
+//         const currentShow = {
+//           line,
+//           isAsterisked: !!isAsterisked,
+//           band,
+//           metadata,
+//         };
+//         currentDay.shows.push(currentShow);
+//       }
+//     });
+//
+//   if (currentDay) {
+//     finalStructure.push(currentDay);
+//   }
+//
+//   localStorage.sotwData = JSON.stringify(finalStructure);
+//   setData(finalStructure);
+//   setLoading(false);
 }
 
 let initialState = [];
